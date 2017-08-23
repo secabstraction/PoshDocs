@@ -16,11 +16,11 @@ function Invoke-DocumentDbProcedure {
         [string]
         ${Procedure},
         
-        [Parameter(Position=2)]
+        [ValidateNotNullOrEmpty()]
         [object[]]
         ${Parameters},
-                
-        [Parameter(Position=3)]
+        
+        [ValidateNotNullOrEmpty()]
         [string[]]
         ${PartitionKey},
 
@@ -30,47 +30,25 @@ function Invoke-DocumentDbProcedure {
 
         [ValidateNotNullOrEmpty()]
         [string]
-        ${ApiVersion} = '2017-01-19',
+        ${Version},
 
         [ValidateNotNull()]
         [System.Management.Automation.PSCredential]
         [System.Management.Automation.CredentialAttribute()]
         ${Credential} = [System.Management.Automation.PSCredential]::Empty
     )
-    
-    $Headers = @{ 'x-ms-version' = $ApiVersion }
 
-    if ($PSBoundParameters['PartitionKey']) { 
-        $Headers['x-ms-documentdb-partitionkey'] = ConvertTo-Json $PartitionKey -Compress
-    }
-
-    $RestParameters = @{ 
+    $ApiParameters = @{
         Uri = '{0}{1}/{2}' -f $Uri.AbsoluteUri, $Link, $Procedure
         Body = ConvertTo-Json $Parameters -Compress -Depth 4
-    }
-    
-    $TokenParameters = @{ 
-        ResourceType = 'sprocs' 
         ResourceLink = '{0}/{1}' -f $Link, $Procedure
-    }
-
-    $TokenParameters['Method'] = $RestParameters['Method'] = 'Post'
-    $TokenParameters['Date'] = $Headers['x-ms-date'] = [datetime]::UtcNow.ToString('R')
-
-    if ($PSBoundParameters['Credential']) { 
-        $Key = $Credential.GetNetworkCredential()
-        $TokenParameters['KeyType'] =  $Key.UserName
-        $TokenParameters['Key'] =  $Key.Password
+        ResourceType = 'sprocs'
+        Method = 'Post'
     }
     
-    $Headers['Authorization'] = New-CosmosDbToken @TokenParameters
-    $RestParameters['Headers'] = $Headers
+    $PSBoundParameters.Keys | ForEach-Object {
+        if ($_ -notin @('Uri','Link','Procedure','Parameters')) { $ApiParameters[$_] = $PSBoundParameters[$_] }
+    }
     
-    try { Invoke-RestMethod @RestParameters }
-    catch { 
-        # Invoke-Restmethod throws terminating errors for several HttpStatusCodes.
-        # This empty catch block allows those errors to be passed to custom error
-        # handling routines upstream via ErrorVariable parameters and prevents the
-        # halting of asynchronous jobs running in object event handler runspaces.
-    } 
+    Invoke-DocumentDbRestApi @ApiParameters
 }

@@ -9,6 +9,7 @@ function bulkImport(transactionId, docs) {
     if (!transactionId) throw new Error("The transactionId is undefined or null.")
 
     var docsLength = docs.length;
+    
     if (docsLength == 0) {
         getContext().getResponse().setBody(0);
         return;

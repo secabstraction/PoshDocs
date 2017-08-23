@@ -38,37 +38,21 @@ function New-DocumentDbResource {
         [System.Management.Automation.CredentialAttribute()]
         ${Credential} = [System.Management.Automation.PSCredential]::Empty
     )
-    
-    if ($PSBoundParameters['Headers']) { $Headers['x-ms-version']  = $ApiVersion }
-    else { $Headers = @{ 'x-ms-version' = $ApiVersion } }
-    
-    $RestParameters = @{ Body = $Body }
-    $TokenParameters = @{ ResourceType = $Type }
-    
-    $TokenParameters['Method'] = $RestParameters['Method'] = 'Post'
-    $TokenParameters['Date'] = $Headers['x-ms-date'] = [datetime]::UtcNow.ToString('R')
 
-    if ($PSBoundParameters['Credential']) { 
-        $Key = $Credential.GetNetworkCredential()
-        $TokenParameters['KeyType'] = $Key.UserName
-        $TokenParameters['Key'] = $Key.Password
+    $ApiParameters = @{
+        ResourceType = $Type
+        Method = 'Post'
     }
     
     if ($PSBoundParameters['Link']) { 
-        $TokenParameters['ResourceLink'] = $Link
-        $RestParameters['Uri'] = '{0}{1}/{2}' -f $Uri.AbsoluteUri, $Link, $Type 
+        $ApiParameters['Uri'] = '{0}{1}/{2}' -f $Uri.AbsoluteUri, $Link, $Type
+        $ApiParameters['ResourceLink'] = $Link
     }
-    else { $RestParameters['Uri'] = '{0}{1}' -f $Uri.AbsoluteUri, $Type }
-
-    $Headers['Authorization'] = New-CosmosDbToken @TokenParameters
+    else { $ApiParameters['Uri'] = '{0}{1}' -f $Uri.AbsoluteUri, $Type }
     
-    $RestParameters['Headers'] = $Headers
-
-    try { Invoke-RestMethod @RestParameters }
-    catch { 
-        # Invoke-Restmethod throws terminating errors for several HttpStatusCodes.
-        # This empty catch block allows those errors to be passed to custom error
-        # handling routines upstream via ErrorVariable parameters and prevents the
-        # halting of asynchronous jobs running in object event handler runspaces.
-    } 
+    $PSBoundParameters.Keys | ForEach-Object {
+        if ($_ -notin @('Uri','Link','Type')) { $ApiParameters[$_] = $PSBoundParameters[$_] }
+    }
+    
+    Invoke-DocumentDbRestApi @ApiParameters
 }

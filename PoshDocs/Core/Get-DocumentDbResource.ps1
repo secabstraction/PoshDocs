@@ -11,7 +11,7 @@
         [string]
         ${Link},
         
-        [Parameter(Position=3)]
+        [ValidateNotNullOrEmpty()]
         [string[]]
         ${PartitionKey},
 
@@ -21,42 +21,24 @@
         
         [ValidateNotNullOrEmpty()]
         [string]
-        ${ApiVersion} = '2017-01-19',
+        ${Version},
 
         [ValidateNotNull()]
         [System.Management.Automation.PSCredential]
         [System.Management.Automation.CredentialAttribute()]
         ${Credential} = [System.Management.Automation.PSCredential]::Empty
-    )    
-    
-    $Headers = @{ 'x-ms-version' = $ApiVersion }
-    
-    if ($PSBoundParameters['PartitionKey']) { 
-        $Headers['x-ms-documentdb-partitionkey'] = ConvertTo-Json $PartitionKey -Compress
+    )
+
+    $ApiParameters = @{
+        Uri = '{0}{1}' -f $Uri.AbsoluteUri, $Link
+        ResourceType = $Link.Split('/')[-2]
+        ResourceLink = $Link
+        Method = 'Get'
     }
     
-    $RestParameters = @{ Uri = '{0}{1}' -f $Uri.AbsoluteUri, $Link }
-    
-    $TokenParameters = @{ ResourceType = $Link.Split('/')[-2]; ResourceLink = $Link }
-    $TokenParameters['Date'] = $Headers['x-ms-date'] = [datetime]::UtcNow.ToString('R')
-    $TokenParameters['Method'] = $RestParameters['Method'] = 'Get'
-
-    if ($PSBoundParameters['Credential']) { 
-        $Key = $Credential.GetNetworkCredential()
-        $TokenParameters['KeyType'] = $Key.UserName
-        $TokenParameters['Key'] = $Key.Password
+    $PSBoundParameters.Keys | ForEach-Object {
+        if ($_ -notin @('Uri','Link')) { $ApiParameters[$_] = $PSBoundParameters[$_] }
     }
 
-    $Headers['Authorization'] = New-CosmosDbToken @TokenParameters
-    $RestParameters['Headers'] = $Headers
-
-    Write-Verbose $ErrorActionPreference
-
-    try { Invoke-RestMethod @RestParameters }
-    catch { 
-        # Invoke-Restmethod throws terminating errors for several HttpStatusCodes.
-        # This empty catch block allows those errors to be passed to custom error
-        # handling routines upstream via ErrorVariable parameters and prevents the
-        # halting of asynchronous jobs running in object event handler runspaces.
-    } 
+    Invoke-DocumentDbRestApi @ApiParameters
 }
