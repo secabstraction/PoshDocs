@@ -41,8 +41,8 @@ function Invoke-DocumentDbProcedure {
     $ApiParameters = @{
         Uri = '{0}{1}/{2}' -f $Uri.AbsoluteUri, $Link, $Procedure
         Body = ConvertTo-Json $Parameters -Compress -Depth 4
-        ResourceLink = '{0}/{1}' -f $Link, $Procedure
-        ResourceType = 'sprocs'
+        Link = '{0}/{1}' -f $Link, $Procedure
+        Type = 'sprocs'
         Method = 'Post'
     }
     

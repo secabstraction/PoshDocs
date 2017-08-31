@@ -6,7 +6,7 @@ function Get-DocumentDbResourceList {
     #>
     [CmdletBinding()]
     param (
-        [Parameter(Position=0, Mandatory=$true)]
+        [Parameter(Position=0)]
         [ValidateSet('dbs','colls','docs','users','permissions','sprocs','triggers','udfs','attachments','offers')]
         [string]
         ${Type},
@@ -34,18 +34,15 @@ function Get-DocumentDbResourceList {
         ${Credential} = [System.Management.Automation.PSCredential]::Empty
     )
 
-    $ApiParameters = @{ 
-        Method = 'Get'
-        ResourceType = $Type
-    }
+    $ApiParameters = @{ Method = 'Get' }
     
     $PSBoundParameters.Keys | ForEach-Object {
-        if ($_ -notin @('Uri','Link','Type')) { $ApiParameters[$_] = $PSBoundParameters[$_] }
+        if ($_ -notin @('Uri','Link')) { $ApiParameters[$_] = $PSBoundParameters[$_] }
     }
     
     if ($PSBoundParameters['Link']) { 
         $ApiParameters['Uri'] = '{0}{1}/{2}' -f $Uri.AbsoluteUri, $Link, $Type
-        $ApiParameters['ResourceLink'] = $Link
+        $ApiParameters['Link'] = $Link
     }
     else { $ApiParameters['Uri'] = '{0}{1}' -f $Uri.AbsoluteUri, $Type }
 

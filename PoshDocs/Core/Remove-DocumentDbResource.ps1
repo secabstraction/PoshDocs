@@ -31,8 +31,8 @@ function Remove-DocumentDbResource {
 
     $ApiParameters = @{
         Uri = '{0}{1}' -f $Uri.AbsoluteUri, $Link
-        ResourceType = $Link.Split('/')[-2]
-        ResourceLink = $Link
+        Type = $Link.Split('/')[-2]
+        Link = $Link
         Method = 'Delete'
     }
     

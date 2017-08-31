@@ -9,13 +9,13 @@ function New-DocumentDbToken {
         [Microsoft.PowerShell.Commands.WebRequestMethod]
         ${Method},
         
-        [Parameter(Mandatory=$true)]
+        [Parameter()]
         [ValidateSet('dbs','colls','docs','users','permissions','sprocs','triggers','udfs','attachments','offers')]
         [string]
-        ${ResourceType},
+        ${Type},
         
         [string]
-        ${ResourceLink},
+        ${Link},
         
         [ValidateNotNullOrEmpty()]
         [string]
@@ -36,7 +36,7 @@ function New-DocumentDbToken {
 
     $HmacSha256 = New-Object 'System.Security.Cryptography.HMACSHA256' -ArgumentList @(,[Convert]::FromBase64String($Key))  
 
-    $PayLoad = "{0}`n{1}`n{2}`n{3}`n{4}`n" -f $Method.ToString().ToLower(), $ResourceType, $ResourceLink, $Date.ToLower(), [string]::Empty
+    $PayLoad = "{0}`n{1}`n{2}`n{3}`n{4}`n" -f $Method.ToString().ToLower(), $Type, $Link, $Date.ToLower(), [string]::Empty
 
     $HashPayLoad = $HmacSha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($PayLoad))
 

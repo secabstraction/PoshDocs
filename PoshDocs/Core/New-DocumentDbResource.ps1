@@ -31,7 +31,7 @@ function New-DocumentDbResource {
         
         [ValidateNotNullOrEmpty()]
         [string]
-        ${ApiVersion} = '2017-01-19',
+        ${Version},
 
         [ValidateNotNull()]
         [System.Management.Automation.PSCredential]
@@ -40,13 +40,13 @@ function New-DocumentDbResource {
     )
 
     $ApiParameters = @{
-        ResourceType = $Type
+        Type = $Type
         Method = 'Post'
     }
     
     if ($PSBoundParameters['Link']) { 
         $ApiParameters['Uri'] = '{0}{1}/{2}' -f $Uri.AbsoluteUri, $Link, $Type
-        $ApiParameters['ResourceLink'] = $Link
+        $ApiParameters['Link'] = $Link
     }
     else { $ApiParameters['Uri'] = '{0}{1}' -f $Uri.AbsoluteUri, $Type }
     

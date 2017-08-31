@@ -8,7 +8,7 @@ function Invoke-DocumentDbBulkImport {
     param (
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
-        [System.Collections.Generic.List[psobject]]
+        [System.Collections.ObjectModel.Collection[psobject]]
         ${InputObject},
 
         [Parameter(Mandatory=$true)]
@@ -37,7 +37,7 @@ function Invoke-DocumentDbBulkImport {
         
         [ValidateNotNullOrEmpty()]
         [string]
-        ${ApiVersion},
+        ${Version},
         
         [ValidateNotNull()]
         [System.Management.Automation.PSCredential]
@@ -80,8 +80,9 @@ function Invoke-DocumentDbBulkImport {
                 $InitParameters.Remove('Link')
                 
                 Initialize-DocumentDbBulkImport @InitParameters
-    
-                $Response = Invoke-DocumentDbProcedure @BulkImport @CommonParameters
+                Invoke-DocumentDbProcedure @BulkImport @CommonParameters
+
+                if ($ProcedureError.Count) { throw $ProcedureError }
             }
             429 { # Too many requests
                 $ProcedureError.Clear()

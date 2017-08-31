@@ -5,8 +5,8 @@ function Split-Collection {
         License: BSD 3-Clause
     #>
     param (
-        [Parameter(Position=0, Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
-        [System.Collections.ICollection]
+        [Parameter(Position=0, Mandatory=$true, ValueFromPipeline=$true)]
+        [psobject[]]
         ${InputObject},
 
         [Parameter(Mandatory=$true)]
@@ -16,12 +16,9 @@ function Split-Collection {
     begin { $PSObjects = New-Object 'System.Collections.Generic.List[psobject]' }
     process {
         foreach ($Object in $InputObject) { 
-            $PSObjects.Add($Object)
-            if ($PSObjects.Count -eq $NewSize) { 
-                ,[System.Collections.Generic.List[psobject]]$PSObjects.ToArray()
-                $PSObjects.Clear()
-            }
+            if ($PSObjects.Count -eq $NewSize) { ,$PSObjects; $PSObjects.Clear() }
+            else { $PSObjects.Add($Object) }
         }
     }
-    end { ,[System.Collections.Generic.List[psobject]]$PSObjects.ToArray() }
+    end { if ($PSObjects.Count) { ,$PSObjects } }
 }

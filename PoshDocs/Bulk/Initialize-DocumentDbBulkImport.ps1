@@ -23,7 +23,7 @@ function Initialize-DocumentDbBulkImport {
         [Parameter(ParameterSetName='Partitioned')]
         [ValidateRange(10001,250000)]
         [int]
-        ${Throughput} = 25000,
+        ${Throughput} = 50000,
         
         [ValidateNotNullOrEmpty()]
         [uri]
@@ -31,7 +31,7 @@ function Initialize-DocumentDbBulkImport {
         
         [ValidateNotNullOrEmpty()]
         [string]
-        ${ApiVersion},
+        ${Version},
         
         [ValidateNotNull()]
         [System.Management.Automation.PSCredential]
@@ -53,7 +53,10 @@ function Initialize-DocumentDbBulkImport {
     $null = Get-DocumentDbResource -Link $CollectionLink @CommonParameters
     
     if ($ResourceError.Count) { # Create if not found
-        if ($ResourceError[0].InnerException.Response.StatusCode -eq 'NotFound') {
+
+        $Response = $ResourceError[0].InnerException.Response
+
+        if ($Response.StatusCode -eq 'NotFound') {
 
             $ResourceError.Clear()
 
@@ -62,7 +65,10 @@ function Initialize-DocumentDbBulkImport {
             $null = Get-DocumentDbResource -Link $DatabaseLink @CommonParameters
             
             if ($ResourceError.Count) { # Create if not found
-                if ($ResourceError[0].InnerException.Response.StatusCode -eq 'NotFound') {
+                
+                $Response = $ResourceError[0].InnerException.Response
+                
+                if ($Response.StatusCode -eq 'NotFound') {
                     
                     $ResourceError.Clear()
                     
@@ -73,9 +79,9 @@ function Initialize-DocumentDbBulkImport {
                     
                     $null = New-DocumentDbResource @Resource @CommonParameters
         
-                    if ($ResourceError.Count) { throw $ResourceError[0] }
+                    if ($ResourceError.Count) { throw $ResourceError }
                 }
-                else { throw $ResourceError[0] }
+                else { throw $ResourceError }
             }
 
             $Resource = @{
@@ -86,6 +92,10 @@ function Initialize-DocumentDbBulkImport {
 
             $Body = @{ 
                 id = $Collection
+                indexingPolicy = @{
+                    automatic = $true
+                    indexingMode = 'Lazy' # supposed to increase throughput, can change later
+                }
                 partitionKey = @{ 
                     paths = @("/$PartitionKeyPath")  
                     kind = 'Hash'
@@ -96,26 +106,58 @@ function Initialize-DocumentDbBulkImport {
 
             $null = New-DocumentDbResource @Resource @CommonParameters
 
-            if ($ResourceError.Count) { throw $ResourceError[0] }
+            if ($ResourceError.Count) { throw $ResourceError }
         }
-        else { throw $ResourceError[0] }
+        else { throw $ResourceError }
     }
 
-    # Create bulkImport stored procedure
-    $ScriptPath = Join-Path -Path $PSScriptRoot -ChildPath 'StoredProcedures'
-    $ScriptPath = Join-Path -Path $ScriptPath -ChildPath 'bulkImport.js'
-    $Procedure = [System.IO.File]::ReadAllText($ScriptPath)
+    # Create bulkImport stored procedure, here-string is portable
+    $Procedure = @'
+function bulkImport(transactionId, docs) {
+    var collection = getContext().getCollection();
+    var collectionLink = collection.getSelfLink();
+
+    var count = 0;
+
+    if (!docs) throw new Error("The array is undefined or null.");
+    if (!transactionId) throw new Error("The transactionId is undefined or null.")
+
+    var docsLength = docs.length;
+    
+    if (docsLength == 0) {
+        getContext().getResponse().setBody(0);
+        return;
+    }
+
+    tryCreateDoc(docs[count], tryCreateNextDoc);
+
+    function tryCreateDoc(doc, callback) {
+        doc.transactionId = transactionId;
+        var isAccepted = collection.createDocument(collectionLink, doc, tryCreateNextDoc);
+        if (!isAccepted) getContext().getResponse().setBody(count);
+    }
+
+    function tryCreateNextDoc(err, doc, options) {
+        if (err) throw err;
+
+        count++;
+
+        if (count >= docsLength) {
+            getContext().getResponse().setBody(count);
+        } else {
+            tryCreateDoc(docs[count], tryCreateNextDoc);
+        }
+    }
+}
+'@
     
     $Resource = @{
         Type = 'sprocs'
         Link = $CollectionLink
-        Body = ConvertTo-Json @{
-            id = 'bulkImport'
-            body = $Procedure
-        } -Compress
+        Body = ConvertTo-Json @{ id = 'bulkImport'; body = $Procedure } -Compress
     }
     
     $null = New-DocumentDbResource @Resource @CommonParameters
     
-    if ($ResourceError.Count) { throw $ResourceError[0] }
+    if ($ResourceError.Count) { throw $ResourceError }
 }

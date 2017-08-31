@@ -23,14 +23,14 @@ function Invoke-DocumentDbRestApi {
         [hashtable]
         ${Headers},
         
-        [Parameter(Mandatory=$true)]
+        [Parameter()]
         [ValidateSet('dbs','colls','docs','users','permissions','sprocs','triggers','udfs','attachments','offers')]
         [string]
-        ${ResourceType},
+        ${Type},
         
         [ValidateNotNullOrEmpty()]
         [string]
-        ${ResourceLink},
+        ${Link},
 
         [ValidateNotNullOrEmpty()]
         [string[]]
@@ -44,7 +44,7 @@ function Invoke-DocumentDbRestApi {
         [System.Management.Automation.PSCredential]
         [System.Management.Automation.CredentialAttribute()]
         ${Credential} = [System.Management.Automation.PSCredential]::Empty
-    )
+    ) 
     
     $RestParameters = @{ Uri = $Uri }
     
@@ -53,14 +53,11 @@ function Invoke-DocumentDbRestApi {
     if ($PSBoundParameters.ContainsKey('Headers')) { $Headers['x-ms-version'] = $Version }
     else { $Headers = @{ 'x-ms-version' = $Version } }
 
-    if ($PSBoundParameters.ContainsKey('PartitionKey')) { 
-        $Headers['x-ms-documentdb-partitionkey'] = ConvertTo-Json $PartitionKey -Compress
-    }
+    if ($PSBoundParameters.ContainsKey('PartitionKey')) { $Headers['x-ms-documentdb-partitionkey'] = ConvertTo-Json $PartitionKey -Compress }
     
-    $TokenParameters = @{ 
-        ResourceType = $ResourceType
-        ResourceLink = $ResourceLink
-    }
+    $TokenParameters = @{ Link = $Link }
+
+    if ($PSBoundParameters.ContainsKey('Type')) { $TokenParameters['Type'] = $Type }
     
     if ($PSBoundParameters.ContainsKey('Credential')) { 
         $Key = $Credential.GetNetworkCredential()
@@ -75,14 +72,13 @@ function Invoke-DocumentDbRestApi {
 
     $RestParameters['Headers'] = $Headers
     
+    # Invoke-Restmethod throws terminating errors for several HttpStatusCodes.
+    # This try/catch block allows those errors to be passed to custom error
+    # handling routines upstream via ErrorVariable parameters and prevents the
+    # halting of asynchronous jobs running in separate runspaces.
     try { Invoke-RestMethod @RestParameters }
     catch { 
-        if ($PSBoundParameters.ContainsKey('ErrorVariable')) {
-            $PSBoundParameters['ErrorVariable'] = $_
-        }
-        # Invoke-Restmethod throws terminating errors for several HttpStatusCodes.
-        # This try/catch block allows those errors to be passed to custom error
-        # handling routines upstream via ErrorVariable parameters and prevents the
-        # halting of asynchronous jobs running in separate runspaces.
+        if ($PSBoundParameters.ContainsKey('ErrorVariable')) { $PSBoundParameters['ErrorVariable'] = $_ }
+        else { throw }
     }
 }

@@ -21,7 +21,7 @@ function Export-DocumentDb {
         .PARAMETER Uri
         Specifies the Uri of an Azure Cosmos DB DocumentDB instance. Defaults to Azure Cosmos DB emulator running on localhost.
         
-        .PARAMETER ApiVersion
+        .PARAMETER Version
         Specifies the version of the DocumentDB's REST API.
         
         .PARAMETER Credential
@@ -45,7 +45,7 @@ function Export-DocumentDb {
         [Parameter(Position=0)]
         [ValidateNotNullOrEmpty()]
         [string]
-        ${Database} = 'powerstash',
+        ${Database} = 'poshdoc',
         
         [Parameter(Mandatory=$true, Position=1)]
         [ValidateNotNullOrEmpty()]
@@ -76,7 +76,7 @@ function Export-DocumentDb {
         
         [ValidateNotNullOrEmpty()]
         [string]
-        ${ApiVersion},
+        ${Version},
         
         [ValidateNotNull()]
         [System.Management.Automation.PSCredential]
@@ -85,64 +85,53 @@ function Export-DocumentDb {
     )
 
     begin { 
-        $Time = [datetime]::Now
-        $Collection = [regex]::Replace($Collection, '^Deserialized.', '').ToLower() 
+        $Date = [datetime]::UtcNow
         
         # We need to group objects by time before exporting
         # Create a dictionary of lists with time as the key
-        $ObjectDictionary = New-Object 'System.Collections.Generic.Dictionary[string,Object]'
+        $Dictionary = New-Object 'System.Collections.Generic.Dictionary[string,System.Collections.ObjectModel.Collection[psobject]]'
     }
     
     process { 
         foreach ($Object in $InputObject) { 
             
-            if ($PSBoundParameters['TimeProperty']) { $Time = [datetime]::Parse($Object.$TimeProperty) }
-            elseif ($Object.SweepTime) { $Time = [datetime]::Parse($Object.SweepTime) }
+            if ($PSBoundParameters['TimeProperty']) { $Date = [datetime]::Parse($Object.$TimeProperty).ToUniversalTime() }
 
-            $Index = $Database + '-' + $Time.ToUniversalTime().ToString('yyyy.MM.dd')
+            $Index = '{0}-{1}' -f $Database, $Date.ToString('yyyy.MM.dd')
             
             # Add the object to an existing list
-            if ($ObjectDictionary.ContainsKey($Index)) { ($ObjectDictionary[$Index]).Add($Object) }
-            
-            else { # Add the object to a new list in the dictionary
-                $ObjectList = New-Object 'System.Collections.Generic.List[psobject]'
-                $ObjectList.Add($Object)
-                $ObjectDictionary[$Index] = $ObjectList
-            }
+            if (!$Dictionary.ContainsKey($Index)) { $Dictionary[$Index] = New-Object 'System.Collections.ObjectModel.Collection[psobject]' }
+            ($Dictionary[$Index]).Add($Object)
         } 
     }
 
     end { 
-        $CommonParameters = @{}
+        $BulkParameters = @{}
         
         $PSBoundParameters.Keys | ForEach-Object { # clone common parameters
-            if ($_ -notin @('InputObject','TimeProperty','Database','Size')) { $CommonParameters[$_] = $PSBoundParameters[$_] }
+            if ($_ -notin @('InputObject','TimeProperty','Database','Size')) { $BulkParameters[$_] = $PSBoundParameters[$_] }
         }
         
-        $ObjectDictionary.Keys | ForEach-Object {
+        $Dictionary.Keys | ForEach-Object {
 
-            if (($ObjectDictionary[$_]).Count -le $Size) {
+            if (($Dictionary[$_]).Count -le $Size) {
                 
-                $ImportParameters = @{
-                    Database = $_ 
-                    InputObject = $ObjectDictionary[$_]
-                }
+                $BulkParameters['Database'] = $_
+                $BulkParameters['InputObject'] = $Dictionary[$_]
 
-                Invoke-DocumentDbBulkImport @ImportParameters @CommonParameters
+                Invoke-DocumentDbBulkImport @BulkParameters
             }
 
             else {
 
-                $Database = $_
+                $Index = $_
 
-                Split-Collection -InputObject $ObjectDictionary[$_] -NewSize $Size | ForEach-Object {
+                Split-Collection -InputObject $Dictionary[$Index] -NewSize $Size | ForEach-Object {
                     
-                    $ImportParameters = @{
-                        Database = $Database
-                        InputObject = $_
-                    }
+                    $BulkParameters['Database'] = $Index
+                    $BulkParameters['InputObject'] = $_
     
-                    Invoke-DocumentDbBulkImport @ImportParameters @CommonParameters
+                    Invoke-DocumentDbBulkImport @BulkParameters
                 }
             }
         }       
