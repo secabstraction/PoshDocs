@@ -36,8 +36,8 @@ function Get-DocumentDbResourceList {
 
     $ApiParameters = @{ Method = 'Get' }
     
-    $PSBoundParameters.Keys | ForEach-Object {
-        if ($_ -notin @('Uri','Link')) { $ApiParameters[$_] = $PSBoundParameters[$_] }
+    foreach ($Key in $PSBoundParameters.Keys) {
+        if ($Key -notin @('Uri','Link')) { $ApiParameters[$Key] = $PSBoundParameters[$Key] }
     }
     
     if ($PSBoundParameters['Link']) { 

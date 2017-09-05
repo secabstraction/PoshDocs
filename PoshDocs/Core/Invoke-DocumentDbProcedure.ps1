@@ -45,9 +45,11 @@ function Invoke-DocumentDbProcedure {
         Type = 'sprocs'
         Method = 'Post'
     }
+
+    $LocalParameters = @('Uri','Link','Procedure','Parameters')
     
-    $PSBoundParameters.Keys | ForEach-Object {
-        if ($_ -notin @('Uri','Link','Procedure','Parameters')) { $ApiParameters[$_] = $PSBoundParameters[$_] }
+    foreach ($Key in $PSBoundParameters.Keys) {
+        if ($Key -notin $LocalParameters) { $ApiParameters[$Key] = $PSBoundParameters[$Key] }
     }
     
     Invoke-DocumentDbRestApi @ApiParameters

@@ -50,8 +50,8 @@ function New-DocumentDbResource {
     }
     else { $ApiParameters['Uri'] = '{0}{1}' -f $Uri.AbsoluteUri, $Type }
     
-    $PSBoundParameters.Keys | ForEach-Object {
-        if ($_ -notin @('Uri','Link','Type')) { $ApiParameters[$_] = $PSBoundParameters[$_] }
+    foreach ($Key in $PSBoundParameters.Keys) {
+        if ($Key -notin @('Uri','Link','Type')) { $ApiParameters[$Key] = $PSBoundParameters[$Key] }
     }
     
     Invoke-DocumentDbRestApi @ApiParameters

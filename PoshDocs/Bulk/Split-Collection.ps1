@@ -17,7 +17,7 @@ function Split-Collection {
     process {
         foreach ($Object in $InputObject) { 
             if ($PSObjects.Count -eq $NewSize) { ,$PSObjects; $PSObjects.Clear() }
-            else { $PSObjects.Add($Object) }
+            else { $null = $PSObjects.Add($Object) }
         }
     }
     end { if ($PSObjects.Count) { ,$PSObjects } }

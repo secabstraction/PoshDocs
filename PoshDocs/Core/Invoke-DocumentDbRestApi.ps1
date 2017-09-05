@@ -23,7 +23,6 @@ function Invoke-DocumentDbRestApi {
         [hashtable]
         ${Headers},
         
-        [Parameter()]
         [ValidateSet('dbs','colls','docs','users','permissions','sprocs','triggers','udfs','attachments','offers')]
         [string]
         ${Type},
@@ -61,8 +60,8 @@ function Invoke-DocumentDbRestApi {
     
     if ($PSBoundParameters.ContainsKey('Credential')) { 
         $Key = $Credential.GetNetworkCredential()
-        $TokenParameters['KeyType'] =  $Key.UserName
-        $TokenParameters['Key'] =  $Key.Password
+        $TokenParameters['KeyType'] = $Key.UserName
+        $TokenParameters['Key'] = $Key.Password
     }
 
     $TokenParameters['Method'] = $RestParameters['Method'] = $Method

@@ -27,6 +27,11 @@ function Invoke-DocumentDbBulkImport {
         ${PartitionKey},
         
         [Parameter(ParameterSetName='Partitioned')]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        ${PartitionKeyPath},
+        
+        [Parameter(ParameterSetName='Partitioned')]
         [ValidateRange(10001,250000)]
         [int]
         ${Throughput},
@@ -46,25 +51,23 @@ function Invoke-DocumentDbBulkImport {
     )
     
     $CommonParameters = @{}
+    $LocalParameters = @('InputObject','Database','Collection','PartitionKey','PartitionKeyPath','Throughput')
 
-    $PSBoundParameters.Keys | ForEach-Object { # clone common parameters
-        if ($_ -notin @('InputObject','Database','Collection','PartitionKey','Throughput')) { $CommonParameters[$_] = $PSBoundParameters[$_] }
+    foreach ($Key in $PSBoundParameters.Keys) { # clone common parameters
+        if ($Key -notin $LocalParameters) { $CommonParameters[$Key] = $PSBoundParameters[$Key] }
     }
-    
-    $CommonParameters['Link'] = 'dbs/{0}/colls/{1}/sprocs' -f $Database, $Collection
-    $CommonParameters['ErrorAction'] = 'SilentlyContinue'
-    $CommonParameters['ErrorVariable'] = 'ProcedureError'
-
-    $TransactionId = [guid]::NewGuid()
 
     $BulkImport = @{
         Procedure = 'bulkImport'
-        Parameters = @($TransactionId, $InputObject)
+        Parameters = @(,$InputObject)
+        Link = 'dbs/{0}/colls/{1}/sprocs' -f $Database, $Collection
+        ErrorAction = 'SilentlyContinue'
+        ErrorVariable = 'ProcedureError'
     }
 
     if ($PSBoundParameters['PartitionKey']) { $BulkImport['PartitionKey'] = $PartitionKey }
     
-    Invoke-DocumentDbProcedure @BulkImport @CommonParameters
+    $null = Invoke-DocumentDbProcedure @BulkImport @CommonParameters
 
     if ($ProcedureError.Count) {
         
@@ -73,14 +76,13 @@ function Invoke-DocumentDbBulkImport {
         switch ($Response.StatusCode.value__) {
             404 { # Not Found
                 $ProcedureError.Clear()
-    
-                $InitParameters = $CommonParameters.Clone()
-                $InitParameters['Collection'] = $Collection
-                $InitParameters['Database'] = $Database
-                $InitParameters.Remove('Link')
                 
-                Initialize-DocumentDbBulkImport @InitParameters
-                Invoke-DocumentDbProcedure @BulkImport @CommonParameters
+                $Configuration = @{ Database = $Database; Collection = $Collection }
+                if ($PSBoundParameters['PartitionKeyPath']) { $Configuration['PartitionKeyPath'] = $PartitionKeyPath }
+                if ($PSBoundParameters['Throughput']) { $Configuration['Throughput'] = $Throughput }
+
+                Initialize-DocumentDbBulkImport @Configuration @CommonParameters
+                $null = Invoke-DocumentDbProcedure @BulkImport @CommonParameters
 
                 if ($ProcedureError.Count) { throw $ProcedureError }
             }
@@ -92,7 +94,7 @@ function Invoke-DocumentDbBulkImport {
                 Write-Warning ('Server received too many requests, sleeping for {0}ms...' -f $RetryAfter)
                 Start-Sleep -Milliseconds $RetryAfter
 
-                Invoke-DocumentDbProcedure @BulkImport @CommonParameters
+                $null = Invoke-DocumentDbProcedure @BulkImport @CommonParameters
             }
             default { throw $ProcedureError }
         }

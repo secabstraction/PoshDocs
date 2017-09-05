@@ -40,9 +40,10 @@ function Initialize-DocumentDbBulkImport {
     )
     
     $CommonParameters = @{}
+    $LocalParameters = @('Database','Collection')
     
-    $PSBoundParameters.Keys | ForEach-Object { # clone common parameters
-        if ($_ -notin @('Database','Collection')) { $CommonParameters[$_] = $PSBoundParameters[$_] }
+    foreach ($Key in $PSBoundParameters.Keys) { # clone common parameters
+        if ($Key -notin $LocalParameters) { $CommonParameters[$Key] = $PSBoundParameters[$Key] }
     }
     
     $CommonParameters['ErrorAction'] = 'SilentlyContinue'
@@ -113,14 +114,13 @@ function Initialize-DocumentDbBulkImport {
 
     # Create bulkImport stored procedure, here-string is portable
     $Procedure = @'
-function bulkImport(transactionId, docs) {
+function bulkImport(docs) {
     var collection = getContext().getCollection();
     var collectionLink = collection.getSelfLink();
 
     var count = 0;
 
     if (!docs) throw new Error("The array is undefined or null.");
-    if (!transactionId) throw new Error("The transactionId is undefined or null.")
 
     var docsLength = docs.length;
     
@@ -132,7 +132,6 @@ function bulkImport(transactionId, docs) {
     tryCreateDoc(docs[count], tryCreateNextDoc);
 
     function tryCreateDoc(doc, callback) {
-        doc.transactionId = transactionId;
         var isAccepted = collection.createDocument(collectionLink, doc, tryCreateNextDoc);
         if (!isAccepted) getContext().getResponse().setBody(count);
     }

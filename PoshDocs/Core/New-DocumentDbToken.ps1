@@ -9,7 +9,6 @@ function New-DocumentDbToken {
         [Microsoft.PowerShell.Commands.WebRequestMethod]
         ${Method},
         
-        [Parameter()]
         [ValidateSet('dbs','colls','docs','users','permissions','sprocs','triggers','udfs','attachments','offers')]
         [string]
         ${Type},

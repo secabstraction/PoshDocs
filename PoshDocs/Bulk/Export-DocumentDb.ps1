@@ -107,30 +107,23 @@ function Export-DocumentDb {
 
     end { 
         $BulkParameters = @{}
+        $LocalParameters = @('InputObject','TimeProperty','Database','Size')
         
-        $PSBoundParameters.Keys | ForEach-Object { # clone common parameters
-            if ($_ -notin @('InputObject','TimeProperty','Database','Size')) { $BulkParameters[$_] = $PSBoundParameters[$_] }
+        foreach ($Key in $PSBoundParameters.Keys) { # clone common parameters
+            if ($Key -notin $LocalParameters) { $BulkParameters[$Key] = $PSBoundParameters[$Key] }
         }
         
-        $Dictionary.Keys | ForEach-Object {
+        foreach ($Index in $Dictionary.Keys) {
 
-            if (($Dictionary[$_]).Count -le $Size) {
-                
-                $BulkParameters['Database'] = $_
-                $BulkParameters['InputObject'] = $Dictionary[$_]
+            $BulkParameters['Database'] = $Index
 
+            if (($Dictionary[$Index]).Count -le $Size) {
+                $BulkParameters['InputObject'] = $Dictionary[$Index]
                 Invoke-DocumentDbBulkImport @BulkParameters
             }
-
             else {
-
-                $Index = $_
-
                 Split-Collection -InputObject $Dictionary[$Index] -NewSize $Size | ForEach-Object {
-                    
-                    $BulkParameters['Database'] = $Index
                     $BulkParameters['InputObject'] = $_
-    
                     Invoke-DocumentDbBulkImport @BulkParameters
                 }
             }
