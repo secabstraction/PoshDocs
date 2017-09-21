@@ -4,6 +4,7 @@ function Remove-DocumentDbResource {
         Author: Jesse Davis (@secabstraction)
         License: BSD 3-Clause
     #>
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
     [CmdletBinding()]
     param (
         [Parameter(Position=0, Mandatory=$true)]

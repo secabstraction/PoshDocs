@@ -4,6 +4,9 @@ function New-DocumentDbToken {
         Author: Jesse Davis (@secabstraction)
         License: BSD 3-Clause
     #>
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [OutputType('System.String')]
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
         [Microsoft.PowerShell.Commands.WebRequestMethod]

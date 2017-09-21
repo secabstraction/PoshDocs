@@ -6,7 +6,6 @@ function Invoke-DocumentDbRestApi {
     #>
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [uri]
         ${Uri} = 'https://localhost:8081',
