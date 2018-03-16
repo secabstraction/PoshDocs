@@ -1,9 +1,39 @@
+<#
+    .SYNOPSIS
+    Initializes resources of a Document DB collection to support server-side bulkimport of documents.
+
+    .DESCRIPTION
+    Initialize-DocumentDbBulkImport checks for necessary resources to support server-side bulkimport of JSON documents into a Document DB collection and creates any resources that aren't present and initialized.
+
+    .PARAMETER Database
+    Specifies the database name for the collection.
+
+    .PARAMETER Collection
+    Specifies the collection name.
+
+    .PARAMETER PartitionKeyPath
+    Specifies the property to use as the key for partitioning data across a collection. Sets the PartitionKey value during collection creation.
+
+    .PARAMETER Throughput
+    Specifies the request units per second to reserve for the collection.
+
+    .PARAMETER Uri
+    Specifies the URI of the Document DB REST endpoint.
+
+    .PARAMETER Version
+    Specifies the version of the Document DB REST API.
+
+    .PARAMETER Credential
+    Specifies the credentials for accessing the Document DB REST endpoint.
+
+    .NOTES
+    Author: Jesse Davis (@secabstraction)
+    License: BSD 3-Clause
+
+    .LINK
+    https://github.com/Azure/azure-documentdb-js-server
+#>
 function Initialize-DocumentDbBulkImport {
-    <#        
-        .NOTES
-        Author: Jesse Davis (@secabstraction)
-        License: BSD 3-Clause
-    #>
     param (
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
@@ -21,9 +51,12 @@ function Initialize-DocumentDbBulkImport {
         ${PartitionKeyPath} = 'ComputerName',
         
         [Parameter(ParameterSetName='Partitioned')]
-        [ValidateRange(10001,250000)]
+        [ValidateRange(1000,250000)]
         [int]
         ${Throughput} = 50000,
+        
+        [int]
+        ${TimeToLive} = -1,
         
         [ValidateNotNullOrEmpty()]
         [uri]
@@ -39,86 +72,75 @@ function Initialize-DocumentDbBulkImport {
         ${Credential}
     )
     
-    $CommonParameters = @{}
-    $LocalParameters = @('Database','Collection')
-    
-    foreach ($Key in $PSBoundParameters.Keys) { # clone common parameters
-        if ($Key -notin $LocalParameters) { $CommonParameters[$Key] = $PSBoundParameters[$Key] }
+    switch -regex ($PSBoundParameters.Key) {
+        'Database|Collection|PartitionKeyPath|Throughput|TimeToLive' {
+            $null = $PSBoundParameters.Remove($_) # used in this script only
+        }
     }
     
-    $CommonParameters['ErrorAction'] = 'SilentlyContinue'
-    $CommonParameters['ErrorVariable'] = 'ResourceError'
+    $PSBoundParameters['ErrorAction'] = 'SilentlyContinue'
+    $PSBoundParameters['ErrorVariable'] = 'ResourceError'
     
     # Check for collection
     $CollectionLink = 'dbs/{0}/colls/{1}' -f $Database, $Collection
-    $null = Get-DocumentDbResource -Link $CollectionLink @CommonParameters
-    
-    if ($ResourceError.Count) { # Create if not found
+    $null = Get-DocumentDbResource -Link $CollectionLink @PSBoundParameters    
+    if ($ResourceError.Count) {
 
-        $Response = $ResourceError[0].InnerException.Response
-
-        if ($Response.StatusCode -eq 'NotFound') {
-
+        if ($ResourceError[0].InnerException.Response.StatusCode -ne 'NotFound') { 
+            throw $ResourceError
+        } else { # Create collection, but check for database first
             $ResourceError.Clear()
+            $null = Get-DocumentDbResource -Link "dbs/$Database" @PSBoundParameters            
+            if ($ResourceError.Count) {
 
-            # Check for database
-            $DatabaseLink = "dbs/$Database"
-            $null = Get-DocumentDbResource -Link $DatabaseLink @CommonParameters
-            
-            if ($ResourceError.Count) { # Create if not found
-                
-                $Response = $ResourceError[0].InnerException.Response
-                
-                if ($Response.StatusCode -eq 'NotFound') {
-                    
-                    $ResourceError.Clear()
-                    
+                if ($ResourceError[0].InnerException.Response.StatusCode -ne 'NotFound') {
+                    throw $ResourceError
+                } else { # Create database
+                    $ResourceError.Clear()                    
                     $Resource = @{
                         Type = 'dbs'
                         Body = '{{"id":"{0}"}}' -f $Database
                     }
                     
-                    $null = New-DocumentDbResource @Resource @CommonParameters
-        
-                    if ($ResourceError.Count) { throw $ResourceError }
-                }
-                else { throw $ResourceError }
+                    $null = New-DocumentDbResource @Resource @PSBoundParameters
+                    if ($ResourceError.Count) { 
+                        throw $ResourceError
+                    }
+                }  
             }
 
             $Resource = @{
                 Type = 'colls'
-                Link = $DatabaseLink
+                Link = "dbs/$Database"
                 Headers = @{ 'x-ms-offer-throughput' = $Throughput }
+                Body = ConvertTo-Json -Compress -InputObject @{ 
+                    id = $Collection
+                    indexingPolicy = @{
+                        automatic = $true
+                        indexingMode = 'Lazy' # should increase throughput
+                    }
+                    partitionKey = @{
+                        paths = @("/$PartitionKeyPath")
+                        kind = 'Hash'
+                    }
+                    defaultTtl = $TimeToLive
+                }
             }
 
-            $Body = @{ 
-                id = $Collection
-                indexingPolicy = @{
-                    automatic = $true
-                    indexingMode = 'Lazy' # supposed to increase throughput, can change later
-                }
-                partitionKey = @{ 
-                    paths = @("/$PartitionKeyPath")  
-                    kind = 'Hash'
-                }
+            $null = New-DocumentDbResource @Resource @PSBoundParameters
+            if ($ResourceError.Count) {
+                throw $ResourceError
             }
-
-            $Resource['Body'] = ConvertTo-Json $Body -Compress
-
-            $null = New-DocumentDbResource @Resource @CommonParameters
-
-            if ($ResourceError.Count) { throw $ResourceError }
         }
-        else { throw $ResourceError }
     }
 
-    # Create bulkImport stored procedure, here-string is portable
+    # bulkImport stored procedure, here-string is portable
+    # https://github.com/Azure/azure-documentdb-js-server/blob/master/samples/stored-procedures/BulkImport.js
     $Procedure = @'
 function bulkImport(docs) {
+    var count = 0;
     var collection = getContext().getCollection();
     var collectionLink = collection.getSelfLink();
-
-    var count = 0;
 
     if (!docs) throw new Error("The array is undefined or null.");
 
@@ -148,15 +170,18 @@ function bulkImport(docs) {
         }
     }
 }
-'@
-    
+'@    
     $Resource = @{
         Type = 'sprocs'
         Link = $CollectionLink
-        Body = ConvertTo-Json @{ id = 'bulkImport'; body = $Procedure } -Compress
+        Body = ConvertTo-Json -Compress -InputObject @{
+            id = 'bulkImport'
+            body = $Procedure
+        }
     }
-    
-    $null = New-DocumentDbResource @Resource @CommonParameters
-    
-    if ($ResourceError.Count) { throw $ResourceError }
+
+    $null = New-DocumentDbResource @Resource @PSBoundParameters    
+    if ($ResourceError.Count) {
+        throw $ResourceError
+    }
 }

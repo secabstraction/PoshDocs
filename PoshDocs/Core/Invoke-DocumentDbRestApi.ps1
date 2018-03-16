@@ -1,9 +1,48 @@
+<#
+    .SYNOPSIS
+    Short description
+
+    .DESCRIPTION
+    Long description
+
+    .PARAMETER Link
+    Specifies the path to a resource.
+
+    .PARAMETER Type
+    Specifies the type of resource.
+
+    .PARAMETER PartitionKey
+    Specifies a unique field to use as the partition key for sharding data across a collection.
+
+    .PARAMETER Body
+    Specifies the parameters from which the resource will be created.
+
+    .PARAMETER Headers
+    Specifies any custom headers to pass to the Azure Document DB REST API.
+
+    .PARAMETER Method
+    Specifies the WebRequestMethod to use for interacting with the Document DB REST API.
+
+    .PARAMETER Uri
+    Specifies the URI of the Document DB REST endpoint.
+
+    .PARAMETER Version
+    Specifies the version of the Document DB REST API.
+
+    .PARAMETER Credential
+    Specifies the credentials for accessing the Document DB REST endpoint.
+
+    .EXAMPLE
+    An example
+       
+    .NOTES
+    Author: Jesse Davis (@secabstraction)
+    License: BSD 3-Clause
+
+    .LINK
+    https://docs.microsoft.com/en-us/rest/api/documentdb/common-tasks-using-the-documentdb-rest-api
+#>
 function Invoke-DocumentDbRestApi {
-    <#        
-        .NOTES
-        Author: Jesse Davis (@secabstraction)
-        License: BSD 3-Clause
-    #>
     [CmdletBinding()]
     param (
         [ValidateNotNullOrEmpty()]
@@ -36,47 +75,57 @@ function Invoke-DocumentDbRestApi {
 
         [ValidateNotNullOrEmpty()]
         [string]
-        ${Version} = '2017-01-19',
+        ${Version} = '2017-11-15',
 
         [ValidateNotNull()]
         [System.Management.Automation.PSCredential]
         [System.Management.Automation.CredentialAttribute()]
         ${Credential} = [System.Management.Automation.PSCredential]::Empty
-    ) 
-    
-    $RestParameters = @{ Uri = $Uri }
-    
-    if ($PSBoundParameters.ContainsKey('Body')) { $RestParameters['Body'] = $Body }
-    
-    if ($PSBoundParameters.ContainsKey('Headers')) { $Headers['x-ms-version'] = $Version }
-    else { $Headers = @{ 'x-ms-version' = $Version } }
+    )
 
-    if ($PSBoundParameters.ContainsKey('PartitionKey')) { $Headers['x-ms-documentdb-partitionkey'] = ConvertTo-Json $PartitionKey -Compress }
+    if ($PSBoundParameters.ContainsKey('Version')) {
+        $null = $PSBoundParameters.Remove('Version')
+    }
+    if ($PSBoundParameters.ContainsKey('Headers')) { 
+        $PSBoundParameters['Headers']['x-ms-version'] = $Version
+    } else {
+        $PSBoundParameters['Headers'] = @{ 'x-ms-version' = $Version }
+    }
+    if ($PSBoundParameters.ContainsKey('PartitionKey')) {
+        $null = $PSBoundParameters.Remove('PartitionKey')
+        $PSBoundParameters['Headers']['x-ms-documentdb-partitionkey'] = ConvertTo-Json $PartitionKey -Compress
+    }
     
     $TokenParameters = @{ Link = $Link }
-
-    if ($PSBoundParameters.ContainsKey('Type')) { $TokenParameters['Type'] = $Type }
-    
-    if ($PSBoundParameters.ContainsKey('Credential')) { 
+    if ($PSBoundParameters.ContainsKey('Link')) { 
+        $null = $PSBoundParameters.Remove('Link') 
+    }
+    if ($PSBoundParameters.ContainsKey('Type')) {
+        $null = $PSBoundParameters.Remove('Type')
+        $TokenParameters['Type'] = $Type 
+    }    
+    if ($PSBoundParameters.ContainsKey('Credential')) {
+        $null = $PSBoundParameters.Remove('Credential')
         $Key = $Credential.GetNetworkCredential()
         $TokenParameters['KeyType'] = $Key.UserName
         $TokenParameters['Key'] = $Key.Password
     }
-
-    $TokenParameters['Method'] = $RestParameters['Method'] = $Method
-    $TokenParameters['Date'] = $Headers['x-ms-date'] = [datetime]::UtcNow.ToString('R')
+    $TokenParameters['Method'] = $Method
+    $TokenParameters['Date'] = $PSBoundParameters['Headers']['x-ms-date'] = [datetime]::UtcNow.ToString('R')
     
-    $Headers['Authorization'] = New-DocumentDbToken @TokenParameters
-
-    $RestParameters['Headers'] = $Headers
+    $PSBoundParameters['Headers']['Authorization'] = New-DocumentDbToken @TokenParameters
     
     # Invoke-Restmethod throws terminating errors for several HttpStatusCodes.
     # This try/catch block allows those errors to be passed to custom error
     # handling routines upstream via ErrorVariable parameters and prevents the
     # halting of asynchronous jobs running in separate runspaces.
-    try { Invoke-RestMethod @RestParameters }
-    catch { 
-        if ($PSBoundParameters.ContainsKey('ErrorVariable')) { $PSBoundParameters['ErrorVariable'] = $_ }
-        else { throw }
+    try { 
+        Invoke-RestMethod @PSBoundParameters
+    } catch { 
+        if ($PSBoundParameters.ContainsKey('ErrorVariable')) { 
+            $PSBoundParameters['ErrorVariable'] = $_
+        } else { 
+            throw
+        }
     }
 }

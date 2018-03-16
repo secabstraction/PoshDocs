@@ -1,9 +1,39 @@
+<#
+    .SYNOPSIS
+    Short description
+
+    .DESCRIPTION
+    Long description
+
+    .PARAMETER Method
+    Parameter description
+
+    .PARAMETER Type
+    Parameter description
+
+    .PARAMETER Link
+    Parameter description
+
+    .PARAMETER Date
+    Parameter description
+
+    .PARAMETER Key
+    Parameter description
+
+    .PARAMETER KeyType
+    Parameter description
+
+    .PARAMETER TokenVersion
+    Parameter description
+
+    .EXAMPLE
+    An example
+
+    .NOTES
+    Author: Jesse Davis (@secabstraction)
+    License: BSD 3-Clause
+#>
 function New-DocumentDbToken {
-    <#        
-        .NOTES
-        Author: Jesse Davis (@secabstraction)
-        License: BSD 3-Clause
-    #>
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
     [OutputType('System.String')]
     [CmdletBinding()]
@@ -36,15 +66,21 @@ function New-DocumentDbToken {
         ${TokenVersion} = '1.0'
     )  
 
-    $HmacSha256 = New-Object 'System.Security.Cryptography.HMACSHA256' -ArgumentList @(,[Convert]::FromBase64String($Key))  
+    $KeyBytes = [Convert]::FromBase64String($Key)
+    $HmacSha256 = New-Object 'System.Security.Cryptography.HMACSHA256' -ArgumentList @(,$KeyBytes)
 
-    $PayLoad = "{0}`n{1}`n{2}`n{3}`n{4}`n" -f $Method.ToString().ToLower(), $Type, $Link, $Date.ToLower(), [string]::Empty
-
+    if ($Type -eq 'offers') {
+        $Link = $Link.Split('/')[-1].ToLower()
+    }
+    
+    $PayLoad = "{0}`n{1}`n{2}`n{3}`n`n" -f "$Method".ToLower(), $Type, $Link, $Date.ToLower()
     $HashPayLoad = $HmacSha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($PayLoad))
-
-    try { [System.Web.HttpUtility]::UrlEncode(('type={0}&ver={1}&sig={2}' -f $KeyType,$TokenVersion,([Convert]::ToBase64String($HashPayLoad)))) }
-    catch {
+    $Token = 'type={0}&ver={1}&sig={2}' -f $KeyType, $TokenVersion, [Convert]::ToBase64String($HashPayLoad)
+    
+    try { 
+        [System.Web.HttpUtility]::UrlEncode($Token)
+    } catch {
         Add-Type -AssemblyName 'System.Web'
-        [System.Web.HttpUtility]::UrlEncode(('type={0}&ver={1}&sig={2}' -f $KeyType,$TokenVersion,([Convert]::ToBase64String($HashPayLoad))))
+        [System.Web.HttpUtility]::UrlEncode($Token)
     }
 }

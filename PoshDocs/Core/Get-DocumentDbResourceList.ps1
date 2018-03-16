@@ -1,9 +1,36 @@
+<#
+    .SYNOPSIS
+    Short description
+
+    .DESCRIPTION
+    Long description
+
+    .PARAMETER Type
+    Parameter description
+
+    .PARAMETER Link
+    Parameter description
+
+    .PARAMETER PartitionKey
+    Parameter description
+
+    .PARAMETER Uri
+    Parameter description
+
+    .PARAMETER Version
+    Parameter description
+
+    .PARAMETER Credential
+    Parameter description
+
+    .EXAMPLE
+    An example
+
+    .NOTES
+    Author: Jesse Davis (@secabstraction)
+    License: BSD 3-Clause
+#>
 function Get-DocumentDbResourceList {
-    <#        
-        .NOTES
-        Author: Jesse Davis (@secabstraction)
-        License: BSD 3-Clause
-    #>
     [CmdletBinding()]
     param (
         [Parameter(Position=0)]
@@ -22,7 +49,7 @@ function Get-DocumentDbResourceList {
 
         [ValidateNotNullOrEmpty()]
         [uri]
-        ${Uri} = 'https://localhost:8081',
+        ${Uri},
         
         [ValidateNotNullOrEmpty()]
         [string]
@@ -34,17 +61,13 @@ function Get-DocumentDbResourceList {
         ${Credential} = [System.Management.Automation.PSCredential]::Empty
     )
 
-    $ApiParameters = @{ Method = 'Get' }
-    
-    foreach ($Key in $PSBoundParameters.Keys) {
-        if ($Key -notin @('Uri','Link')) { $ApiParameters[$Key] = $PSBoundParameters[$Key] }
+    $PSBoundParameters['Method'] = [Microsoft.PowerShell.Commands.WebRequestMethod]::Get
+        
+    if ($PSBoundParameters.ContainsKey('Link')) {
+        $PSBoundParameters['Uri'] = '{0}{1}/{2}' -f $Uri.AbsoluteUri, $Link, $Type
+    } else { 
+        $PSBoundParameters['Uri'] = '{0}{1}' -f $Uri.AbsoluteUri, $Type
     }
-    
-    if ($PSBoundParameters['Link']) { 
-        $ApiParameters['Uri'] = '{0}{1}/{2}' -f $Uri.AbsoluteUri, $Link, $Type
-        $ApiParameters['Link'] = $Link
-    }
-    else { $ApiParameters['Uri'] = '{0}{1}' -f $Uri.AbsoluteUri, $Type }
 
-    Invoke-DocumentDbRestApi @ApiParameters
+    Invoke-DocumentDbRestApi @PSBoundParameters
 }
